@@ -31,7 +31,7 @@ import { useAuth } from "@/contexts/AuthContext";
  
 type ConversationStep = WorkflowStep;
  
-const AIRecommender = () => {
+const AIRecommender = ({ initialInput, fillParent }: { initialInput?: string; fillParent?: boolean }) => {
   const { toast } = useToast();
   const { logout } = useAuth();
   const [searchParams] = useSearchParams();
@@ -707,7 +707,7 @@ const AIRecommender = () => {
     // Check for sessionStorage key first (for large inputs from Requirements page)
     const inputKey = searchParams.get('inputKey');
     let inputParam = searchParams.get('input');
-    
+   
     if (inputKey) {
       // Retrieve from sessionStorage and clean up
       const storedInput = sessionStorage.getItem(inputKey);
@@ -716,7 +716,12 @@ const AIRecommender = () => {
         sessionStorage.removeItem(inputKey); // Clean up after reading
       }
     }
-    
+   
+    // Prefer prop-based initial input when provided (for embedded tabs)
+    if (!inputParam && initialInput) {
+      inputParam = initialInput;
+    }
+ 
     if (inputParam && !hasAutoSubmitted) {
       // Set the input value
       setState((prev) => ({ ...prev, inputValue: inputParam }));
@@ -729,11 +734,11 @@ const AIRecommender = () => {
      
       return () => clearTimeout(timer);
     }
-  }, [searchParams, hasAutoSubmitted, handleSendMessage]);
+  }, [searchParams, hasAutoSubmitted, handleSendMessage, initialInput]);
  
   return (
     <div
-      className="flex flex-col h-screen bg-gray-50 dark:bg-zinc-900 text-foreground"
+      className={`flex flex-col ${fillParent ? 'h-full' : 'h-screen'} bg-gray-50 dark:bg-zinc-900 text-foreground`}
       ref={containerRef}
     >
       <div className="flex flex-1 overflow-hidden">

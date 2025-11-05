@@ -5,33 +5,37 @@ import { Textarea } from '@/components/ui/textarea';
 import { Send, Loader2, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { identifyInstruments } from '@/components/AIRecommender/api';
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AIRecommender from "@/components/AIRecommender";
+ 
 interface IdentifiedInstrument {
   category: string;
   productName: string;
   specifications: Record<string, string>;
   sampleInput: string;
 }
-
+ 
 interface IdentifiedAccessory {
   category: string;
   accessoryName: string;
   specifications: Record<string, string>;
   sampleInput: string;
 }
-
+ 
 const Requirements = () => {
   const [requirements, setRequirements] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [instruments, setInstruments] = useState<IdentifiedInstrument[]>([]);
   const [accessories, setAccessories] = useState<IdentifiedAccessory[]>([]);
   const [showResults, setShowResults] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('requirements');
+  const [searchTabs, setSearchTabs] = useState<{ id: string; title: string; input: string }[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
-
+ 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    
+   
     if (!requirements.trim()) {
       toast({
         title: "Input Required",
@@ -40,14 +44,14 @@ const Requirements = () => {
       });
       return;
     }
-
+ 
     setIsLoading(true);
     try {
       const response = await identifyInstruments(requirements);
       setInstruments(response.instruments || []);
       setAccessories(response.accessories || []);
       setShowResults(true);
-      
+     
       const totalItems = (response.instruments?.length || 0) + (response.accessories?.length || 0);
       toast({
         title: "Success",
@@ -63,39 +67,72 @@ const Requirements = () => {
       setIsLoading(false);
     }
   };
-
+ 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
   };
-
+ 
+  const addSearchTab = (input: string) => {
+    const nextIndex = searchTabs.length + 1;
+    const id = `search-${Date.now()}-${nextIndex}`;
+    const title = `Search ${nextIndex}`;
+    const newTabs = [...searchTabs, { id, title, input }];
+    setSearchTabs(newTabs);
+    // Defer activating the tab to ensure Radix Tabs sees the new trigger/content
+    setTimeout(() => setActiveTab(id), 0);
+    // Optional: scroll to top so the tab content is visible
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+  };
+ 
+  const closeSearchTab = (id: string) => {
+    const remaining = searchTabs.filter(t => t.id !== id);
+    // Renumber titles sequentially
+    const renumbered = remaining.map((t, idx) => ({ ...t, title: `Search ${idx + 1}` }));
+    setSearchTabs(renumbered);
+    if (activeTab === id) {
+      setActiveTab('requirements');
+    }
+  };
+ 
   const handleRun = (instrument: IdentifiedInstrument) => {
-    // Use sessionStorage to avoid URL length limitations (browser limit ~2048 chars)
-    // This allows passing large sample inputs with many specifications
-    const storageKey = `instrument_input_${Date.now()}`;
-    sessionStorage.setItem(storageKey, instrument.sampleInput);
-    
-    // Open dashboard in new tab with storage key reference
-    const dashboardUrl = `/dashboard?inputKey=${storageKey}`;
-    window.open(dashboardUrl, '_blank');
+    addSearchTab(instrument.sampleInput);
   };
-
+ 
   const handleRunAccessory = (accessory: IdentifiedAccessory) => {
-    // Same approach as instruments - use sessionStorage for large inputs
-    const storageKey = `accessory_input_${Date.now()}`;
-    sessionStorage.setItem(storageKey, accessory.sampleInput);
-    
-    // Open dashboard in new tab with storage key reference
-    const dashboardUrl = `/dashboard?inputKey=${storageKey}`;
-    window.open(dashboardUrl, '_blank');
+    addSearchTab(accessory.sampleInput);
   };
-
+ 
   return (
-    <div className="min-h-screen app-gradient flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-4xl">
-        <div className="surface-card p-8 rounded-2xl">
+    <div className="min-h-screen w-full bg-background">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {searchTabs.length > 0 && (
+          <div className="w-full sticky top-0 z-10 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b">
+            <div className="mx-auto max-w-[1400px] px-4 py-3 flex flex-wrap items-center gap-2">
+              <TabsList className="flex flex-wrap gap-2 bg-transparent p-0">
+                <TabsTrigger value="requirements" className="rounded-lg">Requirements</TabsTrigger>
+                {searchTabs.map((tab) => (
+                  <div key={tab.id} className="flex items-center">
+                    <TabsTrigger value={tab.id} className="rounded-lg">{tab.title}</TabsTrigger>
+                    <button
+                      onClick={() => closeSearchTab(tab.id)}
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      aria-label={`Close ${tab.title}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </TabsList>
+            </div>
+          </div>
+        )}
+ 
+        <TabsContent value="requirements" className="m-0">
+          <div className="mx-auto max-w-[800px] px-6 min-h-screen flex items-center justify-center">
+            <div className="w-full py-6">
           {/* Header */}
           <div className="text-center space-y-4 mb-8">
             <h1 className="text-4xl font-bold">
@@ -105,7 +142,7 @@ const Requirements = () => {
               Describe your Industrial Process Control System needs
             </p>
           </div>
-
+ 
           {!showResults ? (
             /* Input Form */
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -115,10 +152,10 @@ const Requirements = () => {
                   value={requirements}
                   onChange={(e) => setRequirements(e.target.value)}
                   onKeyDown={handleKeyPress}
-                  className="min-h-[200px] text-base resize-none rounded-xl"
+                  className="min-h-[400px] text-base resize-none rounded-xl"
                   disabled={isLoading}
                 />
-                
+               
                 <div className="flex justify-end">
                   <Button
                     type="submit"
@@ -145,7 +182,7 @@ const Requirements = () => {
             <div className="space-y-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">
-                  Identified Instruments ({instruments.length})
+                   Instruments ({instruments.length})
                 </h2>
                 <Button
                   variant="outline"
@@ -160,7 +197,7 @@ const Requirements = () => {
                   New Search
                 </Button>
               </div>
-
+ 
               {/* Instruments Section */}
               {instruments.length > 0 && (
                 <div className="space-y-4">
@@ -188,7 +225,7 @@ const Requirements = () => {
                           Search
                         </Button>
                       </div>
-
+ 
                       {/* Specifications */}
                       {Object.keys(instrument.specifications).length > 0 && (
                         <div className="space-y-2">
@@ -205,7 +242,7 @@ const Requirements = () => {
                           </div>
                         </div>
                       )}
-
+ 
                       {/* Sample Input Preview */}
                       <div className="pt-3 border-t">
                         <p className="text-xs text-muted-foreground mb-2">Sample Input:</p>
@@ -217,7 +254,9 @@ const Requirements = () => {
                   ))}
                 </div>
               )}
-
+              <h2 className="text-2xl font-bold">
+                   Accessories ({accessories.length})
+                </h2>
               {/* Accessories Section */}
               {accessories.length > 0 && (
                 <div className="space-y-4 mt-8">
@@ -245,7 +284,7 @@ const Requirements = () => {
                           Search
                         </Button>
                       </div>
-
+ 
                       {/* Specifications */}
                       {Object.keys(accessory.specifications).length > 0 && (
                         <div className="space-y-2">
@@ -262,7 +301,7 @@ const Requirements = () => {
                           </div>
                         </div>
                       )}
-
+ 
                       {/* Sample Input Preview */}
                       <div className="pt-3 border-t">
                         <p className="text-xs text-muted-foreground mb-2">Sample Input:</p>
@@ -276,10 +315,28 @@ const Requirements = () => {
               )}
             </div>
           )}
-        </div>
-      </div>
+            </div>
+          </div>
+        </TabsContent>
+ 
+        {searchTabs.map((tab) => (
+          <TabsContent
+            key={tab.id}
+            value={tab.id}
+            className="m-0"
+            forceMount
+            style={{ display: activeTab === tab.id ? 'block' : 'none' }}
+          >
+            <div className="h-[calc(100vh-56px)]">
+              <AIRecommender key={tab.id} initialInput={tab.input} fillParent />
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
   );
 };
-
+ 
 export default Requirements;
+ 
+ 
